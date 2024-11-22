@@ -2,7 +2,13 @@
 
 import os
 import json
+import logging
+from datetime import datetime, timedelta
+from typing import Dict, Any
+
 from extractors.bulk_operations import BulkOperationsExtractor
+from processors.data_processor import DataProcessor
+from processors.sync_state import SyncStateTracker
 from queries.bulk_queries import (
     GET_ORDERS_QUERY,
     GET_PRODUCTS_QUERY,
@@ -10,62 +16,103 @@ from queries.bulk_queries import (
     GET_INVENTORY_LEVELS_QUERY,
     GET_COLLECTIONS_QUERY,
     GET_PRODUCT_METAFIELDS_QUERY,
-    GET_SHOP_INFO_QUERY,
-    # add other queries as needed
+    GET_SHOP_INFO_QUERY
 )
-from processors.data_processor import DataProcessor
-# from loaders.gcs_loader import GCSLoader  # commented out as per instructions
+
+def setup_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+
+def run_sync(entity: str, query: str, processor: DataProcessor, 
+             extractor: BulkOperationsExtractor, state_tracker: SyncStateTracker) -> Dict[str, Any]:
+    """run synchronization for a single entity"""
+    try:
+        # get last sync time
+        last_sync = state_tracker.get_last_sync(entity)
+        
+        # prepare paths
+        raw_path = f'data/raw/{entity}/{datetime.now().strftime("%Y%m%d_%H%M%S")}.jsonl'
+        processed_path = f'data/processed/{entity}/{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+        
+        # create directories if they don't exist
+        os.makedirs(os.path.dirname(raw_path), exist_ok=True)
+        os.makedirs(os.path.dirname(processed_path), exist_ok=True)
+        
+        # extract data
+        result = extractor.extract(query, raw_path, incremental_date=last_sync)
+        
+        # process data if extraction successful
+        if result['success']:
+            processed_data = processor.process_jsonl_file(raw_path, entity)
+            with open(processed_path, 'w') as f:
+                json.dump(processed_data, f)
+            
+            # update sync state
+            state_tracker.update_sync_state(entity, {
+                'success': True,
+                **result
+            })
+            
+            return {
+                'success': True,
+                'raw_path': raw_path,
+                'processed_path': processed_path,
+                **result
+            }
+            
+    except Exception as e:
+        logging.error(f"sync failed for {entity}: {str(e)}")
+        state_tracker.update_sync_state(entity, {
+            'success': False,
+            'error': str(e)
+        })
+        return {
+            'success': False,
+            'error': str(e)
+        }
 
 def main():
-    extractor = BulkOperationsExtractor()
-    processor = DataProcessor()
-    # loader = GCSLoader()  # commented out as per instructions
+    setup_logging()
+    logger = logging.getLogger(__name__)
+    
+    try:
+        extractor = BulkOperationsExtractor()
+        processor = DataProcessor()
+        state_tracker = SyncStateTracker()
+        
+        # define sync tasks
+        tasks = [
+            ('orders', GET_ORDERS_QUERY),
+            ('products', GET_PRODUCTS_QUERY),
+            ('customers', GET_CUSTOMERS_QUERY),
+            ('inventory_levels', GET_INVENTORY_LEVELS_QUERY),
+            ('collections', GET_COLLECTIONS_QUERY),
+            ('product_metafields', GET_PRODUCT_METAFIELDS_QUERY),
+            ('shop_info', GET_SHOP_INFO_QUERY)
+        ]
+        
+        results = {}
+        for entity, query in tasks:
+            logger.info(f"starting sync for {entity}")
+            results[entity] = run_sync(entity, query, processor, extractor, state_tracker)
+            
+        # log final status
+        logger.info("sync completed:")
+        for entity, result in results.items():
+            if result['success']:
+                logger.info(f"{entity}: success - {result.get('records_count', 0)} records")
+            else:
+                logger.error(f"{entity}: failed - {result.get('error')}")
+        
+        # get overall stats
+        stats = state_tracker.get_sync_stats()
+        logger.info(f"overall sync stats: {json.dumps(stats, indent=2)}")
 
-    # ensure 'data' directory exists
-    os.makedirs('data', exist_ok=True)
-
-    # list of tuples containing query and file names
-    extraction_tasks = [
-        (GET_ORDERS_QUERY, 'orders'),
-        (GET_PRODUCTS_QUERY, 'products'),
-        (GET_CUSTOMERS_QUERY, 'customers'),
-        (GET_INVENTORY_LEVELS_QUERY, 'inventory_levels'),
-        (GET_COLLECTIONS_QUERY, 'collections'),
-        (GET_PRODUCT_METAFIELDS_QUERY, 'product_metafields'),
-        (GET_SHOP_INFO_QUERY, 'shop_info'),
-        # add other entities as needed
-    ]
-
-    for query, name in extraction_tasks:
-        raw_data_file = os.path.join('data', f'{name}_data.jsonl')
-        processed_data_file = os.path.join('data', f'processed_{name}_data.json')
-
-        # extract data
-        try:
-            print(f"Starting extraction for {name}...")
-            extractor.extract(query, raw_data_file)
-            print(f"Data extraction for {name} completed.")
-        except Exception as e:
-            print(f"Data extraction for {name} failed: {e}")
-            continue  # skip to the next entity
-
-        # process data
-        try:
-            processed_data = processor.process_jsonl_file(raw_data_file, entity=name)
-            with open(processed_data_file, 'w') as f:
-                json.dump(processed_data, f)
-            print(f"Data processing for {name} completed.")
-        except Exception as e:
-            print(f"Data processing for {name} failed: {e}")
-            continue
-
-        # commented out the gcs loading functionality
-        # try:
-        #     loader.upload_file(processed_data_file, os.path.basename(processed_data_file))
-        #     print("Data uploaded to Google Cloud Storage.")
-        # except Exception as e:
-        #     print(f"Data upload failed: {e}")
-        #     continue
+    except Exception as e:
+        logger.error(f"critical error in main process: {str(e)}")
+        raise
 
 if __name__ == '__main__':
     main()

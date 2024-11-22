@@ -1,3 +1,5 @@
 requests
 python-dotenv
 google-cloud-storage
+google-cloud-firestore
+google-auth
