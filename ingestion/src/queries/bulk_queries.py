@@ -1,9 +1,7 @@
 # src/queries/bulk_queries.py
-
-# query to fetch orders
 GET_ORDERS_QUERY = """
 {
-  orders(query: "created_at:>2022-01-01", first: 250) {
+  orders(first: 100) {
     edges {
       node {
         id
@@ -21,7 +19,7 @@ GET_ORDERS_QUERY = """
           firstName
           lastName
         }
-        lineItems(first: 250) {
+        lineItems {
           edges {
             node {
               id
@@ -46,10 +44,9 @@ GET_ORDERS_QUERY = """
 }
 """
 
-# query to fetch products
 GET_PRODUCTS_QUERY = """
 {
-  products(first: 250) {
+  products(first: 100) {
     edges {
       node {
         id
@@ -58,13 +55,11 @@ GET_PRODUCTS_QUERY = """
         updatedAt
         vendor
         productType
-        tags
-        variants(first: 250) {
+        variants {
           edges {
             node {
               id
               sku
-              title
               price
               inventoryQuantity
             }
@@ -76,10 +71,9 @@ GET_PRODUCTS_QUERY = """
 }
 """
 
-# query to fetch customers
 GET_CUSTOMERS_QUERY = """
 {
-  customers(first: 250) {
+  customers(first: 100) {
     edges {
       node {
         id
@@ -87,40 +81,11 @@ GET_CUSTOMERS_QUERY = """
         firstName
         lastName
         createdAt
-        ordersCount
-        totalSpent
-        lastOrder {
-          id
-          name
-          createdAt
-        }
-      }
-    }
-  }
-}
-"""
-
-# query to fetch inventory levels
-GET_INVENTORY_LEVELS_QUERY = """
-{
-  inventoryLevels(first: 250) {
-    edges {
-      node {
-        id
-        available
-        updatedAt
-        location {
-          id
-          name
-        }
-        item {
-          ... on InventoryItem {
-            id
-            sku
-            tracked
-            product {
+        orders(first: 1) {
+          edges {
+            node {
               id
-              title
+              createdAt
             }
           }
         }
@@ -130,17 +95,50 @@ GET_INVENTORY_LEVELS_QUERY = """
 }
 """
 
-# query to fetch collections
+GET_INVENTORY_QUERY = """
+{
+  products(first: 100) {
+    edges {
+      node {
+        id
+        title
+        variants {
+          edges {
+            node {
+              id
+              inventoryItem {
+                id
+                tracked
+                inventoryLevels(first: 10) {
+                  edges {
+                    node {
+                      available
+                      location {
+                        id
+                        name
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
 GET_COLLECTIONS_QUERY = """
 {
-  collections(first: 250) {
+  collections(first: 100) {
     edges {
       node {
         id
         title
         updatedAt
-        productsCount
-        products(first: 250) {
+        products(first: 100) {
           edges {
             node {
               id
@@ -154,15 +152,14 @@ GET_COLLECTIONS_QUERY = """
 }
 """
 
-# query to fetch metafields (example for products)
 GET_PRODUCT_METAFIELDS_QUERY = """
 {
-  products(first: 250) {
+  products(first: 100) {
     edges {
       node {
         id
         title
-        metafields(first: 250) {
+        metafields(first: 100) {
           edges {
             node {
               namespace
@@ -178,18 +175,23 @@ GET_PRODUCT_METAFIELDS_QUERY = """
 }
 """
 
-# query to fetch shop information
 GET_SHOP_INFO_QUERY = """
 {
-  shop {
-    id
-    name
-    email
-    primaryDomain {
-      url
+  products(first: 1) {
+    edges {
+      node {
+        shop {
+          id
+          name
+          email
+          primaryDomain {
+            url
+          }
+          currencyCode
+          timezoneAbbreviation
+        }
+      }
     }
-    currencyCode
-    timezoneAbbreviation
   }
 }
 """

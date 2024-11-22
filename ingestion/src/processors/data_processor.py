@@ -1,42 +1,69 @@
 # src/processors/data_processor.py
 
 import json
+import logging
+from typing import List, Dict, Any, Union
 
 class DataProcessor:
-    def process_jsonl_file(self, input_file_path, entity):
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+
+    def process_jsonl_file(self, input_file_path: str, entity: str) -> List[Dict[str, Any]]:
+        """Process a JSONL file and return structured data"""
         processed_data = []
-        with open(input_file_path, 'r') as infile:
-            for line in infile:
-                record = json.loads(line)
-                processed_record = self.process_record(record, entity)
-                processed_data.append(processed_record)
-        return processed_data
+        try:
+            self.logger.info(f"Processing {entity} data from {input_file_path}")
+            with open(input_file_path, 'r') as infile:
+                for line_num, line in enumerate(infile, 1):
+                    try:
+                        record = json.loads(line)
+                        processed_record = self.process_record(record, entity)
+                        if processed_record is not None:
+                            if isinstance(processed_record, list):
+                                processed_data.extend(processed_record)
+                            else:
+                                processed_data.append(processed_record)
+                    except json.JSONDecodeError as e:
+                        self.logger.error(f"Error decoding JSON at line {line_num}: {str(e)}")
+                        continue
+                    except Exception as e:
+                        self.logger.error(f"Error processing record at line {line_num}: {str(e)}")
+                        continue
 
-    def process_record(self, record, entity):
-        if entity == 'orders':
-            return self.process_order_record(record)
-        elif entity == 'products':
-            return self.process_product_record(record)
-        elif entity == 'customers':
-            return self.process_customer_record(record)
-        elif entity == 'inventory_levels':
-            return self.process_inventory_record(record)
-        elif entity == 'collections':
-            return self.process_collection_record(record)
-        elif entity == 'product_metafields':
-            return self.process_product_metafield_record(record)
-        elif entity == 'shop_info':
-            return self.process_shop_info_record(record)
-        else:
-            # Return the record as is if no specific processing is defined
-            return record
+            self.logger.info(f"Successfully processed {len(processed_data)} records for {entity}")
+            return processed_data
+        except Exception as e:
+            self.logger.error(f"Error processing file {input_file_path}: {str(e)}")
+            raise
 
-    def process_order_record(self, record):
-        # Extract customer information
-        customer = record.get('customer')
+    def process_record(self, record: Dict[str, Any], entity: str) -> Union[Dict[str, Any], List[Dict[str, Any]], None]:
+        """Process a single record based on entity type"""
+        try:
+            if entity == 'orders':
+                return self.process_order_record(record)
+            elif entity == 'products':
+                return self.process_product_record(record)
+            elif entity == 'customers':
+                return self.process_customer_record(record)
+            elif entity == 'inventory_levels':
+                return self.process_inventory_record(record)
+            elif entity == 'collections':
+                return self.process_collection_record(record)
+            elif entity == 'product_metafields':
+                return self.process_product_metafield_record(record)
+            elif entity == 'shop_info':
+                return self.process_shop_info_record(record)
+            else:
+                return record
+        except Exception as e:
+            self.logger.error(f"Error processing {entity} record: {str(e)}")
+            return None
+
+    def process_order_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Process order data"""
+        customer = record.get('customer', {})
         customer_email = customer.get('email') if customer else None
 
-        # Extract line items
         line_items = [
             {
                 'productId': item.get('product', {}).get('id'),
@@ -58,8 +85,8 @@ class DataProcessor:
             'lineItems': line_items,
         }
 
-    def process_product_record(self, record):
-        # Extract variants
+    def process_product_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Process product data"""
         variants = [
             {
                 'id': variant.get('id'),
@@ -82,9 +109,9 @@ class DataProcessor:
             'variants': variants,
         }
 
-    def process_customer_record(self, record):
-        # Process customer data
-        last_order = record.get('lastOrder')
+    def process_customer_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Process customer data"""
+        last_order = record.get('lastOrder', {})
         last_order_id = last_order.get('id') if last_order else None
 
         return {
@@ -98,7 +125,8 @@ class DataProcessor:
             'lastOrderId': last_order_id,
         }
 
-    def process_inventory_record(self, record):
+    def process_inventory_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Process inventory data"""
         item = record.get('item', {})
         location = record.get('location', {})
 
@@ -115,8 +143,8 @@ class DataProcessor:
             'productTitle': item.get('product', {}).get('title'),
         }
 
-    def process_collection_record(self, record):
-        # Extract products
+    def process_collection_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Process collection data"""
         products = [
             {
                 'id': product.get('id'),
@@ -133,8 +161,8 @@ class DataProcessor:
             'products': products,
         }
 
-    def process_product_metafield_record(self, record):
-        # Extract metafields
+    def process_product_metafield_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Process product metafield data"""
         metafields = [
             {
                 'namespace': metafield.get('namespace'),
@@ -151,7 +179,8 @@ class DataProcessor:
             'metafields': metafields,
         }
 
-    def process_shop_info_record(self, record):
+    def process_shop_info_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Process shop info data"""
         primary_domain = record.get('primaryDomain', {})
         return {
             'id': record.get('id'),
@@ -162,19 +191,22 @@ class DataProcessor:
             'primaryDomainUrl': primary_domain.get('url'),
         }
 
-    # helper methods to extract nested data
-    def extract_line_items(self, record):
+    def extract_line_items(self, record: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract line items from record"""
         edges = record.get('lineItems', {}).get('edges', [])
         return [edge.get('node', {}) for edge in edges]
 
-    def extract_variants(self, record):
+    def extract_variants(self, record: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract variants from record"""
         edges = record.get('variants', {}).get('edges', [])
         return [edge.get('node', {}) for edge in edges]
 
-    def extract_products(self, record):
+    def extract_products(self, record: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract products from record"""
         edges = record.get('products', {}).get('edges', [])
         return [edge.get('node', {}) for edge in edges]
 
-    def extract_metafields(self, record):
+    def extract_metafields(self, record: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract metafields from record"""
         edges = record.get('metafields', {}).get('edges', [])
         return [edge.get('node', {}) for edge in edges]

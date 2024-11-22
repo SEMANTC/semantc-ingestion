@@ -1,31 +1,31 @@
-# use an official python runtime as a parent image
+# Dockerfile
 FROM python:3.9-slim
 
-# set environment variables
+# Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-# set the working directory in the container
+# Set the working directory
 WORKDIR /app
 
-# install system dependencies
+# Install system dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     gcc \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# copy requirements.txt into the container
+# Copy requirements.txt into the container
 COPY requirements.txt .
 
-# install python dependencies
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# copy the entire src directory
+# Copy the entire src directory
 COPY src/ src/
 
-# create necessary directories
-RUN mkdir -p data/raw data/processed
+# Create necessary directories
+RUN mkdir -p data/raw data/processed data/state
 
-# command to run on container start
+# Command to run on container start
 CMD ["python", "src/main.py"]
