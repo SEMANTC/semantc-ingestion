@@ -1,0 +1,11 @@
+# https://github.com/langchain-ai/langchain-cohere/blob/main/libs/cohere/langchain_cohere/cohere_agent.py
+
+# build the image
+docker build -t shopify-data-extractor .
+
+# run the container
+docker run --rm --name shopify-extractor --env-file .env shopify-data-extractor
+
+
+# run and save data locally
+docker run --rm --name shopify-extractor -v "$(pwd)/data:/app/data" --env-file .env shopify-data-extractor

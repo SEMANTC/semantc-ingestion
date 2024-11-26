@@ -1,0 +1,20 @@
+# .gitignore
+
+# ignore environment variables
+.env
+
+# ignore virtual environment
+venv/
+__pycache__/
+*.pyc
+
+# ignore system files
+.DS_Store
+
+# ignore logs
+logs/
+*.log
+
+# ignore data files
+*.jsonl
+*.json
