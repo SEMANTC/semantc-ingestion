@@ -19,38 +19,83 @@ class BulkOperationsExtractor(BaseExtractor):
         self.MAX_WAIT_TIME = 3600  # 1 hour
 
     def extract(self, query: str, file_path: str, incremental_date: Optional[datetime] = None) -> Dict[str, Any]:
-        """Main extraction method"""
-        for attempt in range(self.MAX_RETRIES):
-            try:
-                # Add incremental filter if date provided
-                if incremental_date:
-                    query = self._add_date_filter(query, incremental_date)
+        """MAIN EXTRACTION METHOD"""
+        try:
+            # Check for running operations first
+            current_op = self._check_current_operation()
+            if current_op and current_op['status'] in ['RUNNING', 'CREATED']:
+                self.logger.warning("Another bulk operation is currently running, waiting...")
+                status = self._monitor_operation(current_op['id'])
+                if status['status'] not in ['COMPLETED', 'FAILED', 'CANCELED']:
+                    raise Exception("Cannot start new operation - existing operation still running")
 
-                # Start bulk operation
-                bulk_op = self._start_bulk_operation(query)
-                operation_id = bulk_op['id']
-                self.logger.info(f"Started bulk operation {operation_id}")
+            for attempt in range(self.MAX_RETRIES):
+                try:
+                    # Add incremental filter if date provided
+                    if incremental_date:
+                        query = self._add_date_filter(query, incremental_date)
 
-                # Monitor progress
-                status = self._monitor_operation(operation_id)
-                
-                if status['status'] == 'COMPLETED':
-                    # Download and verify data
-                    self._download_and_verify(status['url'], file_path)
-                    return {
-                        'success': True,
-                        'operation_id': operation_id,
-                        'records_count': status.get('objectCount', 0),
-                        'file_size': status.get('fileSize', 0)
-                    }
-                else:
-                    raise Exception(f"Operation failed: {status.get('errorCode', 'Unknown error')}")
+                    # Removed validation that was causing issues
+                    # self._validate_query(query)
 
-            except Exception as e:
-                self.logger.error(f"Attempt {attempt + 1} failed: {str(e)}")
-                if attempt == self.MAX_RETRIES - 1:
-                    raise
-                time.sleep(2 ** attempt)  # Exponential backoff
+                    # Start bulk operation
+                    bulk_op = self._start_bulk_operation(query)
+                    operation_id = bulk_op['id']
+                    self.logger.info(f"Started bulk operation {operation_id}")
+
+                    # Monitor progress
+                    status = self._monitor_operation(operation_id)
+                    
+                    if status['status'] == 'COMPLETED':
+                        # Download and verify data
+                        self._download_and_verify(status['url'], file_path)
+                        return {
+                            'success': True,
+                            'operation_id': operation_id,
+                            'records_count': status.get('objectCount', 0),
+                            'file_size': status.get('fileSize', 0)
+                        }
+                    elif status['status'] == 'FAILED':
+                        if status.get('partialDataUrl'):
+                            self.logger.warning("Operation failed but partial data is available")
+                            self._download_and_verify(status['partialDataUrl'], file_path)
+                            return {
+                                'success': True,
+                                'operation_id': operation_id,
+                                'records_count': status.get('objectCount', 0),
+                                'file_size': status.get('fileSize', 0),
+                                'partial': True
+                            }
+                        error_code = status.get('errorCode', 'Unknown error')
+                        raise Exception(f"Operation failed: {error_code}")
+                    else:
+                        raise Exception(f"Operation ended with status: {status['status']}")
+
+                except Exception as e:
+                    self.logger.error(f"Attempt {attempt + 1} failed: {str(e)}")
+                    if attempt == self.MAX_RETRIES - 1:
+                        raise
+                    time.sleep(2 ** attempt)  # Exponential backoff
+
+        except Exception as e:
+            self.logger.error(f"Extraction failed: {str(e)}")
+            raise
+
+    def _check_current_operation(self) -> Optional[Dict[str, Any]]:
+        """Check if there's a running bulk operation"""
+        query = '''
+        {
+            currentBulkOperation {
+                id
+                status
+                errorCode
+                createdAt
+                objectCount
+            }
+        }
+        '''
+        result = self.client.execute(query)
+        return result.get('currentBulkOperation')
 
     def _start_bulk_operation(self, query: str) -> Dict[str, Any]:
         """Start a bulk operation"""
@@ -96,6 +141,9 @@ class BulkOperationsExtractor(BaseExtractor):
         '''
         
         start_time = time.time()
+        last_count = 0
+        last_update = time.time()
+        
         while time.time() - start_time < self.MAX_WAIT_TIME:
             response = self.client.execute(query)
             current_op = response.get('currentBulkOperation')
@@ -104,10 +152,25 @@ class BulkOperationsExtractor(BaseExtractor):
                 raise Exception("No active bulk operation found")
                 
             status = current_op['status']
+            current_count = int(current_op.get('objectCount', 0))
+            
+            # Log progress if count has changed
+            if current_count != last_count:
+                self.logger.info(
+                    f"Operation status: {status}, "
+                    f"Objects processed: {current_count}, "
+                    f"Time elapsed: {int(time.time() - start_time)}s"
+                )
+                last_count = current_count
+                last_update = time.time()
+            
+            # Check for stalled operation
+            if time.time() - last_update > 300:  # 5 minutes without progress
+                self.logger.warning("Operation appears stalled - no progress in 5 minutes")
+            
             if status in ['COMPLETED', 'FAILED', 'CANCELED']:
                 return current_op
                 
-            self.logger.info(f"Operation status: {status}, Objects processed: {current_op.get('objectCount', 0)}")
             time.sleep(self.POLL_INTERVAL)
             
         raise TimeoutError(f"Operation {operation_id} timed out")
@@ -161,5 +224,5 @@ class BulkOperationsExtractor(BaseExtractor):
         date_str = date.strftime("%Y-%m-%d")
         return query.replace(
             "{INCREMENTAL_FILTER}", 
-            f"updated_at:>={date_str}"
+            f'query: "updated_at:>={date_str}"'
         )

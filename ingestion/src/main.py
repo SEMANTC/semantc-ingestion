@@ -1,4 +1,5 @@
 # src/main.py
+
 import os
 import json
 import logging
@@ -7,16 +8,15 @@ from typing import Dict, Any
 
 from client.shopify_client import ShopifyClient
 from extractors.bulk_operations import BulkOperationsExtractor
+from extractors.shop_operations import ShopOperationsExtractor
 from processors.data_processor import DataProcessor
 from processors.sync_state import SyncStateTracker
 from queries.bulk_queries import (
     GET_ORDERS_QUERY,
     GET_PRODUCTS_QUERY,
     GET_CUSTOMERS_QUERY,
-    GET_INVENTORY_QUERY,
     GET_COLLECTIONS_QUERY,
     GET_PRODUCT_METAFIELDS_QUERY,
-    GET_SHOP_INFO_QUERY
 )
 
 def setup_logging():
@@ -87,25 +87,32 @@ def main():
     logger = logging.getLogger(__name__)
     
     try:
-        extractor = BulkOperationsExtractor()
+        # Initialize extractors and processors
+        client = ShopifyClient()
+        bulk_extractor = BulkOperationsExtractor()
+        shop_extractor = ShopOperationsExtractor()
         processor = DataProcessor()
         state_tracker = SyncStateTracker()
         
-        # Define sync tasks
-        tasks = [
+        # Define bulk operation tasks
+        bulk_tasks = [
             ('orders', GET_ORDERS_QUERY),
             ('products', GET_PRODUCTS_QUERY),
             ('customers', GET_CUSTOMERS_QUERY),
-            ('inventory', GET_INVENTORY_QUERY),
             ('collections', GET_COLLECTIONS_QUERY),
-            ('product_metafields', GET_PRODUCT_METAFIELDS_QUERY),
-            ('shop_info', GET_SHOP_INFO_QUERY)
+            ('product_metafields', GET_PRODUCT_METAFIELDS_QUERY)
         ]
         
         results = {}
-        for entity, query in tasks:
+        
+        # Run bulk operation tasks
+        for entity, query in bulk_tasks:
             logger.info(f"Starting sync for {entity}")
-            results[entity] = run_sync(entity, query, processor, extractor, state_tracker)
+            results[entity] = run_sync(entity, query, processor, bulk_extractor, state_tracker)
+        
+        # Get shop info using dedicated extractor
+        logger.info("Starting sync for shop_info")
+        results['shop_info'] = shop_extractor.extract(state_tracker=state_tracker)
             
         # Log final status
         logger.info("Sync completed:")

@@ -1,13 +1,36 @@
 # src/queries/bulk_queries.py
+
 GET_ORDERS_QUERY = """
 {
-  orders(first: 100) {
+  orders {
     edges {
       node {
         id
         name
         createdAt
-        totalPriceSet {
+        displayFulfillmentStatus
+        displayFinancialStatus
+        closed
+        closedAt
+        currentSubtotalPriceSet {
+          shopMoney {
+            amount
+            currencyCode
+          }
+        }
+        currentTotalPriceSet {
+          shopMoney {
+            amount
+            currencyCode
+          }
+        }
+        currentTotalTaxSet {
+          shopMoney {
+            amount
+            currencyCode
+          }
+        }
+        currentTotalDiscountsSet {
           shopMoney {
             amount
             currencyCode
@@ -18,25 +41,41 @@ GET_ORDERS_QUERY = """
           email
           firstName
           lastName
+          state
+          taxExempt
+          phone
+          numberOfOrders
+          defaultAddress {
+            address1
+            address2
+            city
+            provinceCode
+            province
+            zip
+            country
+            countryCode
+          }
         }
-        lineItems {
-          edges {
-            node {
-              id
-              title
-              quantity
-              originalUnitPriceSet {
-                shopMoney {
-                  amount
-                  currencyCode
-                }
-              }
-              product {
-                id
-                title
-              }
+        shippingAddress {
+          address1
+          address2
+          city
+          provinceCode
+          province
+          zip
+          country
+          countryCode
+          phone
+        }
+        taxLines {
+          priceSet {
+            shopMoney {
+              amount
+              currencyCode
             }
           }
+          rate
+          title
         }
       }
     }
@@ -46,25 +85,34 @@ GET_ORDERS_QUERY = """
 
 GET_PRODUCTS_QUERY = """
 {
-  products(first: 100) {
+  products {
     edges {
       node {
         id
         title
+        handle
         createdAt
         updatedAt
+        publishedAt
+        status
         vendor
         productType
-        variants {
-          edges {
-            node {
-              id
-              sku
-              price
-              inventoryQuantity
-            }
+        description
+        descriptionHtml
+        totalInventory
+        tracksInventory
+        hasOnlyDefaultVariant
+        priceRangeV2 {
+          minVariantPrice {
+            amount
+            currencyCode
+          }
+          maxVariantPrice {
+            amount
+            currencyCode
           }
         }
+        tags
       }
     }
   }
@@ -73,57 +121,33 @@ GET_PRODUCTS_QUERY = """
 
 GET_CUSTOMERS_QUERY = """
 {
-  customers(first: 100) {
+  customers {
     edges {
       node {
         id
         email
         firstName
         lastName
+        phone
+        state
         createdAt
-        orders(first: 1) {
-          edges {
-            node {
-              id
-              createdAt
-            }
-          }
+        updatedAt
+        numberOfOrders
+        verifiedEmail
+        taxExempt
+        tags
+        defaultAddress {
+          address1
+          address2
+          city
+          provinceCode
+          province
+          zip
+          country
+          countryCode
+          phone
         }
-      }
-    }
-  }
-}
-"""
-
-GET_INVENTORY_QUERY = """
-{
-  products(first: 100) {
-    edges {
-      node {
-        id
-        title
-        variants {
-          edges {
-            node {
-              id
-              inventoryItem {
-                id
-                tracked
-                inventoryLevels(first: 10) {
-                  edges {
-                    node {
-                      available
-                      location {
-                        id
-                        name
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+        note
       }
     }
   }
@@ -132,20 +156,16 @@ GET_INVENTORY_QUERY = """
 
 GET_COLLECTIONS_QUERY = """
 {
-  collections(first: 100) {
+  collections {
     edges {
       node {
         id
         title
+        handle
         updatedAt
-        products(first: 100) {
-          edges {
-            node {
-              id
-              title
-            }
-          }
-        }
+        productsCount
+        description
+        descriptionHtml
       }
     }
   }
@@ -154,42 +174,11 @@ GET_COLLECTIONS_QUERY = """
 
 GET_PRODUCT_METAFIELDS_QUERY = """
 {
-  products(first: 100) {
+  products {
     edges {
       node {
         id
         title
-        metafields(first: 100) {
-          edges {
-            node {
-              namespace
-              key
-              value
-              type
-            }
-          }
-        }
-      }
-    }
-  }
-}
-"""
-
-GET_SHOP_INFO_QUERY = """
-{
-  products(first: 1) {
-    edges {
-      node {
-        shop {
-          id
-          name
-          email
-          primaryDomain {
-            url
-          }
-          currencyCode
-          timezoneAbbreviation
-        }
       }
     }
   }
