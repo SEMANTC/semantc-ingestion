@@ -8,74 +8,49 @@ GET_ORDERS_QUERY = """
         id
         name
         createdAt
-        displayFulfillmentStatus
-        displayFinancialStatus
-        closed
-        closedAt
-        currentSubtotalPriceSet {
-          shopMoney {
-            amount
-            currencyCode
-          }
-        }
-        currentTotalPriceSet {
-          shopMoney {
-            amount
-            currencyCode
-          }
-        }
-        currentTotalTaxSet {
-          shopMoney {
-            amount
-            currencyCode
-          }
-        }
-        currentTotalDiscountsSet {
+        currencyCode
+        email
+        totalPriceSet {
           shopMoney {
             amount
             currencyCode
           }
         }
         customer {
-          id
           email
-          firstName
-          lastName
-          state
-          taxExempt
-          phone
-          numberOfOrders
-          defaultAddress {
-            address1
-            address2
-            city
-            provinceCode
-            province
-            zip
-            country
-            countryCode
-          }
         }
-        shippingAddress {
-          address1
-          address2
-          city
-          provinceCode
-          province
-          zip
-          country
-          countryCode
-          phone
-        }
-        taxLines {
-          priceSet {
-            shopMoney {
-              amount
-              currencyCode
+        lineItems {
+          edges {
+            node {
+              id
+              name
+              quantity
+              sku
+              variant {
+                id
+                title
+                sku
+              }
+              originalUnitPriceSet {
+                shopMoney {
+                  amount
+                  currencyCode
+                }
+              }
+              discountedUnitPriceSet {
+                shopMoney {
+                  amount
+                  currencyCode
+                }
+              }
+              discountedTotalSet {
+                shopMoney {
+                  amount
+                  currencyCode
+                }
+              }
             }
           }
-          rate
-          title
         }
       }
     }
@@ -90,29 +65,19 @@ GET_PRODUCTS_QUERY = """
       node {
         id
         title
-        handle
-        createdAt
-        updatedAt
-        publishedAt
-        status
         vendor
-        productType
-        description
-        descriptionHtml
         totalInventory
-        tracksInventory
-        hasOnlyDefaultVariant
-        priceRangeV2 {
-          minVariantPrice {
-            amount
-            currencyCode
-          }
-          maxVariantPrice {
-            amount
-            currencyCode
+        variants {
+          edges {
+            node {
+              id
+              sku
+              title
+              inventoryQuantity
+              price
+            }
           }
         }
-        tags
       }
     }
   }
@@ -128,26 +93,8 @@ GET_CUSTOMERS_QUERY = """
         email
         firstName
         lastName
-        phone
-        state
         createdAt
-        updatedAt
         numberOfOrders
-        verifiedEmail
-        taxExempt
-        tags
-        defaultAddress {
-          address1
-          address2
-          city
-          provinceCode
-          province
-          zip
-          country
-          countryCode
-          phone
-        }
-        note
       }
     }
   }
@@ -163,9 +110,6 @@ GET_COLLECTIONS_QUERY = """
         title
         handle
         updatedAt
-        productsCount
-        description
-        descriptionHtml
       }
     }
   }
@@ -179,7 +123,35 @@ GET_PRODUCT_METAFIELDS_QUERY = """
       node {
         id
         title
+        metafields {
+          edges {
+            node {
+              namespace
+              key
+              value
+            }
+          }
+        }
       }
+    }
+  }
+}
+"""
+
+GET_SHOP_INFO_QUERY = """
+{
+  shop {
+    id
+    name
+    email
+    primaryDomain {
+      url
+      host
+    }
+    currencyCode
+    currencyFormats {
+      moneyFormat
+      moneyWithCurrencyFormat
     }
   }
 }
