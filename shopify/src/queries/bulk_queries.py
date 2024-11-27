@@ -1,5 +1,3 @@
-# src/queries/bulk_queries.py
-
 GET_ORDERS_QUERY = """
 {
   orders {
@@ -8,74 +6,102 @@ GET_ORDERS_QUERY = """
         id
         name
         createdAt
-        displayFulfillmentStatus
+        processedAt
+        currencyCode
+        email
         displayFinancialStatus
-        closed
+        displayFulfillmentStatus
+        cancelledAt
         closedAt
-        currentSubtotalPriceSet {
+        
+        totalPriceSet {
           shopMoney {
             amount
             currencyCode
           }
         }
+        
         currentTotalPriceSet {
           shopMoney {
             amount
             currencyCode
           }
         }
-        currentTotalTaxSet {
+        
+        subtotalPriceSet {
           shopMoney {
             amount
             currencyCode
           }
         }
-        currentTotalDiscountsSet {
+        
+        totalShippingPriceSet {
           shopMoney {
             amount
             currencyCode
           }
         }
+        
+        totalDiscountsSet {
+          shopMoney {
+            amount
+            currencyCode
+          }
+        }
+        
+        totalTaxSet {
+          shopMoney {
+            amount
+            currencyCode
+          }
+        }
+        
         customer {
           id
           email
           firstName
           lastName
-          state
-          taxExempt
-          phone
           numberOfOrders
           defaultAddress {
             address1
-            address2
             city
-            provinceCode
             province
-            zip
             country
-            countryCode
           }
         }
-        shippingAddress {
-          address1
-          address2
-          city
-          provinceCode
-          province
-          zip
-          country
-          countryCode
-          phone
+        
+        lineItems {
+          edges {
+            node {
+              id
+              name
+              quantity
+              sku
+              refundableQuantity
+              currentQuantity
+              variant {
+                id
+                title
+                sku
+                inventoryQuantity
+                price
+              }
+            }
+          }
         }
-        taxLines {
-          priceSet {
+        
+        transactions {
+          id
+          processedAt
+          status
+          kind
+          gateway
+          amountSet {
             shopMoney {
               amount
               currencyCode
             }
           }
-          rate
-          title
         }
       }
     }
@@ -91,28 +117,49 @@ GET_PRODUCTS_QUERY = """
         id
         title
         handle
+        productType
+        vendor
         createdAt
         updatedAt
         publishedAt
         status
-        vendor
-        productType
-        description
-        descriptionHtml
         totalInventory
         tracksInventory
-        hasOnlyDefaultVariant
-        priceRangeV2 {
-          minVariantPrice {
-            amount
-            currencyCode
-          }
-          maxVariantPrice {
-            amount
-            currencyCode
+        
+        variants {
+          edges {
+            node {
+              id
+              title
+              sku
+              price
+              compareAtPrice
+              inventoryQuantity
+              sellableOnlineQuantity
+              
+              inventoryItem {
+                id
+                tracked
+                unitCost {
+                  amount
+                  currencyCode
+                }
+              }
+              
+              selectedOptions {
+                name
+                value
+              }
+            }
           }
         }
-        tags
+        
+        options {
+          id
+          name
+          position
+          values
+        }
       }
     }
   }
@@ -125,29 +172,40 @@ GET_CUSTOMERS_QUERY = """
     edges {
       node {
         id
-        email
         firstName
         lastName
+        email
         phone
-        state
         createdAt
         updatedAt
         numberOfOrders
-        verifiedEmail
-        taxExempt
-        tags
-        defaultAddress {
+        
+        amountSpent {
+          amount
+          currencyCode
+        }
+        
+        addresses {
           address1
-          address2
           city
-          provinceCode
           province
-          zip
           country
-          countryCode
           phone
         }
-        note
+        
+        defaultAddress {
+          address1
+          city
+          province
+          country
+          phone
+        }
+        
+        emailMarketingConsent {
+          marketingState
+          marketingOptInLevel
+          consentUpdatedAt
+        }
       }
     }
   }
@@ -164,8 +222,7 @@ GET_COLLECTIONS_QUERY = """
         handle
         updatedAt
         productsCount
-        description
-        descriptionHtml
+        sortOrder
       }
     }
   }
@@ -179,6 +236,16 @@ GET_PRODUCT_METAFIELDS_QUERY = """
       node {
         id
         title
+        metafields {
+          edges {
+            node {
+              namespace
+              key
+              value
+              type
+            }
+          }
+        }
       }
     }
   }

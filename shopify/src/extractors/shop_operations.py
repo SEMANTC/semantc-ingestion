@@ -6,7 +6,6 @@ import logging
 from datetime import datetime
 from typing import Dict, Any, Optional
 from client.shopify_client import ShopifyClient
-from processors.sync_state import SyncStateTracker
 from extractors.base import BaseExtractor
 
 class ShopOperationsExtractor(BaseExtractor):
@@ -14,12 +13,11 @@ class ShopOperationsExtractor(BaseExtractor):
         self.client = ShopifyClient()
         self.logger = logging.getLogger(__name__)
 
-    def extract(self, output_dir: str = '/app/data', 
-                state_tracker: Optional[SyncStateTracker] = None) -> Dict[str, Any]:
+    def extract(self, output_dir: str = '/app/data') -> Dict[str, Any]:
         """Extract shop information"""
         try:
             # Prepare output directory
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             processed_dir = os.path.join(output_dir, 'processed', 'shop_info')
             os.makedirs(processed_dir, exist_ok=True)
             
@@ -38,10 +36,6 @@ class ShopOperationsExtractor(BaseExtractor):
                 'processed_path': processed_path
             }
             
-            # Update sync state if tracker provided
-            if state_tracker:
-                state_tracker.update_sync_state('shop_info', result)
-            
             return result
             
         except Exception as e:
@@ -51,8 +45,4 @@ class ShopOperationsExtractor(BaseExtractor):
                 'error': str(e)
             }
             
-            # Update sync state if tracker provided
-            if state_tracker:
-                state_tracker.update_sync_state('shop_info', error_result)
-                
             return error_result
