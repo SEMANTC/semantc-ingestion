@@ -1,165 +1,151 @@
-# Shopify Analytics Integration Project
+# SEMANTC Shopify Data Integration
+
+## Problem Statement
+E-commerce platforms like Shopify generate vast amounts of operational data that is challenging to digest and analyze effectively. While Shopify provides built-in analytics, businesses need a more comprehensive solution that can:
+
+1. Extract complete operational data across orders, products, customers, and transactions
+2. Maintain data in its raw form for flexible analysis
+3. Enable integration with other e-commerce platforms and marketplaces
+4. Support AI-powered insights and analytics
+
+This repository focuses specifically on the Shopify data ingestion layer, using the Shopify Admin GraphQL API to extract operational data in a format suitable for downstream analytics.
+
+## Solution Overview
+
+### Core Components
+
+1. **Data Extraction**
+   - Leverages Shopify's Bulk Operations API for efficient data extraction
+   - Handles API rate limits and pagination
+   - Maintains data lineage and audit trails
+
+2. **Storage Format**
+   - Stores data in JSONL format for BigQuery compatibility
+   - Preserves raw data structure from Shopify
+   - Enables creation of external tables in BigQuery
+
+3. **Entity Coverage**
+   - Orders and transactions
+   - Products and inventory
+   - Customers and marketing data
+   - Shop configurations
 
 ## Project Structure
 ```
-.
-├── Dockerfile
-├── requirements.txt
-└── src/
-    ├── main.py
-    ├── client/
-    │   ├── __init__.py
-    │   └── shopify_client.py
-    ├── extractors/
-    │   ├── __init__.py
-    │   ├── base.py
-    │   └── bulk_operations.py
-    ├── processors/
-    │   ├── __init__.py
-    │   ├── data_processor.py
-    │   └── sync_state.py
-    ├── queries/
-    │   ├── __init__.py
-    │   └── bulk_queries.py
-    └── loaders/
-        ├── __init__.py
-        └── gcs_loader.py
+src/
+├── client/            # Shopify API client implementation
+├── extractors/        # Data extraction modules
+├── processors/        # JSONL processing utilities
+├── queries/          # GraphQL query definitions
+├── loaders/          # GCS upload functionality
+└── main.py           # Main execution script
+
+data/
+├── raw/              # Raw JSONL files from Shopify
+├── processed/        # Processed JSON files (if needed)
+└── state/            # Sync state and metadata
 ```
-
-## Component Overview
-
-### Core Files
-
-#### `Dockerfile`
-- Base image: Python 3.9-slim
-- Sets up working environment and dependencies
-- Creates necessary directory structure for data processing
-- Configures Python path and environment variables
-
-#### `main.py`
-- Entry point of the application
-- Orchestrates the ETL process
-- Manages sync tasks for different entities (orders, products, customers, etc.)
-- Handles logging and error reporting
-
-### Client Layer
-
-#### `client/shopify_client.py`
-- Handles authentication with Shopify's GraphQL API
-- Manages API requests and response handling
-- Provides methods for executing GraphQL queries
-- Includes error handling and retry logic
-
-### Extractors Layer
-
-#### `extractors/base.py`
-- Abstract base class for extractors
-- Defines interface for extraction operations
-
-#### `extractors/bulk_operations.py`
-- Implements Shopify's Bulk Operations API
-- Handles large data extractions
-- Manages operation status monitoring
-- Implements data download and verification
-- Supports incremental extractions
-
-### Processors Layer
-
-#### `processors/data_processor.py`
-- Processes raw JSON data into structured format
-- Contains entity-specific processing logic for:
-  - Orders
-  - Products
-  - Customers
-  - Inventory
-  - Collections
-  - Product Metafields
-  - Shop Information
-- Handles data transformation and cleaning
-
-#### `processors/sync_state.py`
-- Tracks synchronization state
-- Manages incremental sync timestamps
-- Stores sync statistics and status
-- Provides methods for state persistence
-
-### Query Definitions
-
-#### `queries/bulk_queries.py`
-- Contains GraphQL query definitions for:
-  - Orders
-  - Products
-  - Customers
-  - Inventory
-  - Collections
-  - Product Metafields
-  - Shop Information
-- Supports pagination through cursor-based navigation
-
-### Data Loading
-
-#### `loaders/gcs_loader.py`
-- Handles data loading to Google Cloud Storage
-- Manages GCS authentication
-- Implements file upload functionality
-
-## Data Flow
-
-1. **Extraction**
-   - `ShopifyClient` authenticates with Shopify
-   - `BulkOperationsExtractor` initiates data extraction
-   - Bulk operation status is monitored
-   - Data is downloaded when complete
-
-2. **Processing**
-   - Raw JSONL data is processed by `DataProcessor`
-   - Entity-specific transformations are applied
-   - Data is structured according to defined schemas
-
-3. **State Management**
-   - `SyncStateTracker` maintains sync state
-   - Tracks successful/failed operations
-   - Manages incremental sync timestamps
-
-4. **Loading**
-   - Processed data can be loaded to GCS
-   - File paths and naming follow defined patterns
 
 ## Key Features
 
-- Incremental syncs support
-- Bulk operation handling
-- Error handling and retries
-- State persistence
-- Data verification
-- GCS integration
-- Comprehensive logging
+1. **Robust Data Extraction**
+   - Handles large datasets through bulk operations
+   - Maintains extraction state for incremental updates
+   - Validates data completeness and integrity
 
-## Data Storage Structure
+2. **Error Handling**
+   - Retries failed operations
+   - Logs extraction errors
+   - Maintains partial data on failures
 
+3. **Storage Integration**
+   - Uploads data to GCS
+   - Maintains folder structure for easy querying
+   - Supports BigQuery external tables
+
+## Getting Started
+
+### Prerequisites
+- Python 3.9+
+- Google Cloud Storage access
+- Shopify Admin API access
+
+### Configuration
+```bash
+# Required environment variables
+SHOPIFY_STORE_URL="your-store.myshopify.com"
+SHOPIFY_ACCESS_TOKEN="your-access-token"
+GCS_BUCKET_NAME="your-bucket"
 ```
-/app/data/
-├── raw/          # Raw data from Shopify
-├── processed/    # Transformed data
-└── state/        # Sync state information
+
+### Installation
+```bash
+# Clone repository
+git clone https://github.com/your-org/semantc-shopify-integration.git
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run extraction
+python src/main.py
 ```
 
-## Current Entity Support
+## Data Model
 
-- Orders
-- Products
-- Customers
-- Inventory
-- Collections
-- Product Metafields
-- Shop Information
+### Core Entities
+1. Orders
+   - Order details
+   - Line items
+   - Fulfillments
+   - Refunds
 
-Each entity supports full extraction with specific field selection and transformation logic.
+2. Products
+   - Product details
+   - Variants
+   - Inventory levels
+   - Metafields
 
-## Current Limitations
+3. Customers
+   - Customer details
+   - Addresses
+   - Marketing preferences
 
-1. Fixed batch size of 100 records per query
-2. No parallel processing implementation
-3. Single destination support (GCS)
-4. Basic error recovery mechanism
-5. Limited data validation
+4. Shop
+   - Configuration
+   - Policies
+   - Shipping settings
+
+## Development
+
+### Adding New Queries
+1. Define GraphQL query in `queries/bulk_queries.py`
+2. Add processing logic in `processors/data_processor.py`
+3. Update extraction handling in `extractors/bulk_operations.py`
+
+### Running Tests
+```bash
+pytest tests/
+```
+
+## Next Steps
+
+### Short Term
+- [ ] Review and enhance current data extraction coverage
+- [ ] Add missing fields needed for core analytics
+- [ ] Implement data validation checks
+- [ ] Add monitoring for extraction jobs
+
+### Medium Term
+- [ ] Optimize refresh cycles
+- [ ] Add support for incremental updates
+- [ ] Enhance error handling
+- [ ] Implement automated testing
+
+## Documentation
+- [Implementation Details](docs/implementation.md)
+- [Query Reference](docs/queries.md)
+- [Field Mappings](docs/field_mappings.md)
+
+## External References
+- [Shopify Admin API Reference](https://shopify.dev/api/admin-graphql)
+- [BigQuery External Tables](https://cloud.google.com/bigquery/docs/external-data-sources)

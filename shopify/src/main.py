@@ -4,110 +4,139 @@ import logging
 import os
 import json
 from datetime import datetime
+from typing import Dict, Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from extractors.bulk_operations import BulkOperationsExtractor
 from extractors.shop_operations import ShopOperationsExtractor
 from processors.data_processor import DataProcessor
-from queries.bulk_queries import (
-    GET_ORDERS_QUERY,
-    GET_PRODUCTS_QUERY,
-    GET_CUSTOMERS_QUERY,
-    GET_COLLECTIONS_QUERY,
-    GET_PRODUCT_METAFIELDS_QUERY
-)
+from queries.bulk_queries import *
 
-def main():
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
+class SyncManager:
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self.extractor = BulkOperationsExtractor()
+        self.processor = DataProcessor()
+        self.shop_extractor = ShopOperationsExtractor()
+        
+        self.entities = {
+            'orders': GET_ORDERS_QUERY,
+            'products': GET_PRODUCTS_QUERY,
+            'customers': GET_CUSTOMERS_QUERY,
+            'collections': GET_COLLECTIONS_QUERY,
+            'product_metafields': GET_PRODUCT_METAFIELDS_QUERY
+        }
 
-    # Exclude 'shop_info' from bulk entities
-    bulk_entities = {
-        'orders': GET_ORDERS_QUERY,
-        'products': GET_PRODUCTS_QUERY,
-        'customers': GET_CUSTOMERS_QUERY,
-        'collections': GET_COLLECTIONS_QUERY,
-        'product_metafields': GET_PRODUCT_METAFIELDS_QUERY
-    }
-
-    bulk_extractor = BulkOperationsExtractor()
-    shop_extractor = ShopOperationsExtractor()
-    processor = DataProcessor()
-
-    sync_stats = {}
-
-    # Process bulk entities
-    for entity, query in bulk_entities.items():
-        logger.info(f"Starting sync for {entity}")
-
+    def sync_entity(self, entity: str, query: str) -> Dict[str, Any]:
+        """Sync a single entity"""
         timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
         raw_file_path = f"data/raw/{entity}/{timestamp}.jsonl"
         processed_file_path = f"data/processed/{entity}/{timestamp}.json"
 
         try:
-            result = bulk_extractor.extract(query, raw_file_path)
-            processor.process_jsonl_file(raw_file_path, processed_file_path, entity)
-
-            sync_stats[entity] = {
-                'last_attempt': datetime.utcnow().isoformat(),
-                'last_success': datetime.utcnow().isoformat(),
-                'records_count': result.get('records_count', 0),
-                'file_size': result.get('file_size', 0),
-                'error': None,
-                'operation_id': result.get('operation_id')
+            result = self.extractor.extract(query, raw_file_path)
+            if result['success']:
+                self.processor.process_jsonl_file(raw_file_path, processed_file_path, entity)
+                return {
+                    'entity': entity,
+                    'status': 'success',
+                    'stats': {
+                        'last_attempt': datetime.utcnow().isoformat(),
+                        'last_success': datetime.utcnow().isoformat(),
+                        'records_count': result.get('records_count', 0),
+                        'file_size': result.get('file_size', 0),
+                        'error': None,
+                        'operation_id': result.get('operation_id')
+                    }
+                }
+            return {
+                'entity': entity,
+                'status': 'failed',
+                'stats': {
+                    'last_attempt': datetime.utcnow().isoformat(),
+                    'last_success': None,
+                    'error': 'Extraction failed without error',
+                    'operation_id': result.get('operation_id')
+                }
+            }
+        except Exception as e:
+            self.logger.error(f"Sync failed for {entity}", exc_info=True)
+            return {
+                'entity': entity,
+                'status': 'failed',
+                'stats': {
+                    'last_attempt': datetime.utcnow().isoformat(),
+                    'last_success': None,
+                    'error': str(e),
+                    'operation_id': None
+                }
             }
 
-            logger.info(f"{entity.capitalize()} data extraction and processing completed successfully.")
-
+    def sync_all(self) -> Dict[str, Any]:
+        """Synchronize all entities"""
+        sync_stats = {}
+        
+        # Sequential processing for bulk operations
+        for entity, query in self.entities.items():
+            self.logger.info(f"Starting sync for {entity}")
+            result = self.sync_entity(entity, query)
+            sync_stats[entity] = result['stats']
+            
+        # Process shop info
+        self.logger.info("Starting sync for shop_info")
+        try:
+            timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+            result = self.shop_extractor.extract(output_dir='data')
+            sync_stats['shop_info'] = {
+                'last_attempt': datetime.utcnow().isoformat(),
+                'last_success': datetime.utcnow().isoformat(),
+                'records_count': 1,
+                'file_size': result.get('file_size', 0),
+                'error': None,
+                'operation_id': None
+            }
         except Exception as e:
-            logger.error(f"Sync failed for {entity}: {str(e)}")
-            sync_stats[entity] = {
+            sync_stats['shop_info'] = {
                 'last_attempt': datetime.utcnow().isoformat(),
                 'last_success': None,
-                'records_count': 0,
-                'file_size': 0,
                 'error': str(e),
                 'operation_id': None
             }
 
-    # Process shop_info separately
-    logger.info("Starting sync for shop_info")
+        # Save sync results
+        self._save_sync_stats(sync_stats)
+        self._log_summary(sync_stats)
+        
+        return sync_stats
+
+    def _save_sync_stats(self, stats: Dict[str, Any]) -> None:
+        """Save sync stats to file"""
+        stats_file = 'data/state/sync_stats.json'
+        os.makedirs(os.path.dirname(stats_file), exist_ok=True)
+        with open(stats_file, 'w') as f:
+            json.dump(stats, f, indent=2)
+
+    def _log_summary(self, stats: Dict[str, Any]) -> None:
+        """Log sync summary"""
+        self.logger.info("Sync completed:")
+        for entity, entity_stats in stats.items():
+            if entity_stats['error']:
+                self.logger.error(f"{entity}: Failed - {entity_stats['error']}")
+            else:
+                self.logger.info(f"{entity}: Success - {entity_stats.get('records_count', 0)} records")
+
+def main():
+    """Main entry point"""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    sync_manager = SyncManager()
     try:
-        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-        processed_file_path = f"data/processed/shop_info/{timestamp}.json"
-        result = shop_extractor.extract(output_dir='data')
-        # No processing needed for shop_info as it's already JSON
-        sync_stats['shop_info'] = {
-            'last_attempt': datetime.utcnow().isoformat(),
-            'last_success': datetime.utcnow().isoformat(),
-            'records_count': 1,
-            'file_size': result.get('file_size', 0),
-            'error': None,
-            'operation_id': None
-        }
-        logger.info("Shop_info data extraction completed successfully.")
+        sync_manager.sync_all()
     except Exception as e:
-        logger.error(f"Sync failed for shop_info: {str(e)}")
-        sync_stats['shop_info'] = {
-            'last_attempt': datetime.utcnow().isoformat(),
-            'last_success': None,
-            'records_count': 0,
-            'file_size': 0,
-            'error': str(e),
-            'operation_id': None
-        }
-
-    # Log sync summary
-    logger.info("Sync completed:")
-    for entity, stats in sync_stats.items():
-        if stats['error']:
-            logger.error(f"{entity}: Failed - {stats['error']}")
-        else:
-            logger.info(f"{entity}: Success - {stats['records_count']} records")
-
-    # Save sync stats
-    stats_file = 'data/state/sync_stats.json'
-    os.makedirs(os.path.dirname(stats_file), exist_ok=True)
-    with open(stats_file, 'w') as f:
-        json.dump(sync_stats, f, indent=2)
+        logging.error("Sync process failed", exc_info=True)
+        raise
 
 if __name__ == "__main__":
     main()
